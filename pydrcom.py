@@ -14,6 +14,10 @@ from optparse import OptionParser
 
 #-------------------------------------------------------------------------------------------
 
+DB_PATH = os.environ['HOME'] + '/.pydrcom.json'
+
+#-------------------------------------------------------------------------------------------
+
 def build_parser():
     usage = 'Usage: pydrcom [login|logout|help] options'
     parser = OptionParser(usage)
@@ -30,39 +34,33 @@ def build_parser():
     return parser
 
 def build_conf(options):
-    db_path = os.environ['HOME'] + '/.pydrcom.json'
     attrs = ('username', 'password', 'serverip')
     conf = {}
 
-    # first read options from command line arguments
     for attr in attrs:
         if getattr(options, attr) != None:
             conf[attr] = getattr(options, attr)
 
-    # complete necessary options using the configuration file
-    if len(conf) != 3:
-        with open(db_path, 'r') as f:
+    try:
+        with open(DB_PATH, 'r') as f:
             db = json.loads(f.read())
-            for attr in attrs:
-                if attr not in conf and attr in db:
-                    conf[attr] = db[attr]
+            for attr in [ clause for clause in attrs if clause not in conf ]:
+                conf[attr] = db[attr]
+    except: 
+        pass
 
-    # incomplete arguments
     if len(conf) != 3:
-        print conf
-        return False
-
-    # write options to db if specified
-    if options.write:
-        with open(db_path, 'a') as f:
-            db = {}
-            for entry in conf:
-                db[entry] = conf[entry]
-            f.write(json.dumps(db))
+        print('insufficient parameter, %s are needed' \
+              % ','.join([ clause for clause in attrs if clause not in conf ]))
+        sys.exit(1)
+    elif options.write:
+        with open(DB_PATH, 'w') as f:
+            f.write(json.dumps(conf))
 
     conf['base'] = 'http://' + conf['serverip'] + '/'
-    conf['logout_url'] = conf['base'] + 'F.htm'
+
     return conf
+
 
 def login(conf):
     parameters = {
@@ -71,8 +69,9 @@ def login(conf):
         '0MKKey': '%B5%C7%C2%BC+Login'}
     return requests.post(conf['base'], params=parameters)
 
+
 def logout(conf):
-    return requests.get(conf['logout_url'])
+    return requests.get(conf['base'] + 'F.htm')
 
 #-------------------------------------------------------------------------------------------
 
@@ -83,20 +82,18 @@ if __name__ == '__main__':
     try:
         options, command = parser.parse_args()
     except:
-        print 'Invalid or insufficient options'
-        parser.print_help()
+        print('Invalid or insufficient options')
 
     conf = build_conf(options)
-
     action = command[0]
+
     if action == 'help' or not conf:
         pass
     elif action == 'login':
-        print login(conf)
+        print(login(conf))
     elif action == 'logout':
-        print logout(conf)
+        print(logout(conf))
     else:
-        print 'action is not valid'
-        print parser.print_help()
+        print('action is not valid')
 
 #-------------------------------------------------------------------------------------------
